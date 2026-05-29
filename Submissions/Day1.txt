@@ -1,0 +1,46 @@
+Day 1 — HieuPhung1003 (Phung Minh Hieu)
+
+✓ Repo:        https://github.com/HieuPhung1003/insighthub-lab
+✓ CLAUDE.md:   https://github.com/HieuPhung1003/insighthub-lab/blob/day1-refactor/CLAUDE.md
+✓ PR refactor: https://github.com/HieuPhung1003/insighthub-lab/pull/1
+✓ Prompt log:  ai-prompts/day1.md (5 prompts)
+
+✓ Verify output:
+   bash scripts/verify-day-1.sh → 10 PASS / 0 FAIL ✓
+
+   [1] CLAUDE.md quality
+       PASS  CLAUDE.md 104 dong (<= 200)
+       PASS  CLAUDE.md co 7 section (>=5 -- du 6-section template)
+   [2] ingestion-worker tach ra
+       PASS  ingestion-worker/Dockerfile ton tai
+       PASS  Worker source code ton tai
+   [3] docker-compose 5 service
+       PASS  docker-compose co 6 service: api ingestion-worker ollama postgres redis web
+   [4] API responsiveness
+       PASS  API alive
+       PASS  POST /documents -> 202 trong 12ms (< 1s, async!)
+       PASS  Document -> 'ready' sau ~5s (worker xu ly xong)
+   [5] Chat API van hoat dong
+       PASS  POST /chat tra ve answer
+   [6] AI prompt log
+       PASS  ai-prompts/day1.md co 5 prompt (>=3)
+   [7] Tests pass
+       SKIP  pytest khong available hoac khong co tests/
+
+✓ docker compose ps -> 5 service Running:
+
+   NAME                            SERVICE            STATUS
+   insighthub-api-1                api                Up (healthy)
+   insighthub-ingestion-worker-1   ingestion-worker   Up
+   insighthub-postgres-1           postgres           Up (healthy)
+   insighthub-redis-1              redis              Up (healthy)
+   insighthub-web-1                web                Up
+
+✓ Tom tat cong viec Day 1:
+   - Tach ingestion logic thanh ingestion-worker doc lap (ARQ + Redis queue)
+   - API upload tra ve 202 Accepted ngay (async), worker xu ly bat dong bo
+   - Cap nhat docker-compose.yml tu v0 (3 service) -> v1 (5 service)
+   - Them Prometheus gauge: ingestion_queue_depth
+   - Fix ChatResponse.sources tra ve Source object (filename + similarity)
+   - Viet CLAUDE.md hoan chinh (104 dong, 7 section)
+   - Ghi chep AI prompt log tai ai-prompts/day1.md
