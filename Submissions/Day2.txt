@@ -1,0 +1,40 @@
+Day 2 — HieuPhung1003 (Phung Minh Hieu)
+
+✓ Repo:              https://github.com/HieuPhung1003/insighthub-lab
+✓ Branch:            day2
+✓ .mcp.json:         4 MCP server (filesystem, docker, kubernetes-mcp-server, prometheus)
+✓ Debug session log: docs/debug-session-day2.md
+
+✓ Verify output:
+   bash scripts/verify-day-2.sh → 6 PASS / 0 FAIL ✓
+
+   [PASS] .mcp.json valid JSON
+   [PASS] .mcp.json có 4 MCP server (≥4)
+   [PASS] Tất cả MCP server version pinned
+   [PASS] claude mcp list shows Connected servers
+   [PASS] debug-session-day2.md tồn tại
+   [PASS] Filesystem MCP allow-list hợp lý
+
+✓ MCP server versions pinned:
+   filesystem         @modelcontextprotocol/server-filesystem@2026.1.14
+   docker             HTTP (http://localhost:30000)
+   kubernetes         kubernetes-mcp-server@0.0.62  --read-only
+   prometheus         prometheus-mcp-server@1.0.1
+
+✓ Security — least-privilege:
+   - kubernetes-mcp-server: cờ --read-only + kubeconfig riêng (mcp-viewer.kubeconfig)
+   - filesystem: allow-list giới hạn đúng thư mục repo InsightHub
+   - credentials để ở biến môi trường, không hardcode trong .mcp.json
+
+✓ Debug session tóm tắt:
+   - Phát hiện ingestion-worker restart loop qua docker MCP (list_containers)
+   - Đọc log xác định ConnectionError → Redis không kết nối được
+   - Đọc .env qua filesystem MCP → phát hiện REDIS_URL=redis://localhost:6379 (sai)
+   - Fix: đổi thành redis://redis:6379 (Docker service name)
+   - Thời gian debug: ~3 phút (so với ~25 phút CLI thủ công)
+
+✓ Tom tat cong viec Day 2:
+   - Cấu hình .mcp.json với 4 MCP server (pin version cụ thể, không dùng @latest)
+   - Áp dụng least-privilege: kubernetes read-only, filesystem allow-list
+   - Debug InsightHub thực tế qua MCP → ghi log tại docs/debug-session-day2.md
+   - docker-compose.yml đủ 5 service từ Day 1 (web, api, ingestion-worker, redis, postgres)
