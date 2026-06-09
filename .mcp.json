@@ -32,6 +32,15 @@
         "-y",
         "prometheus-mcp-server@1.0.1"
       ]
+    },
+    "terraform": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "hashicorp/terraform-mcp-server:1.0.0"
+      ]
     }
   }
 }

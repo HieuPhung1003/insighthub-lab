@@ -40,3 +40,14 @@ Thumbs.db
 # --- Logs / scratch ---
 tmp/
 *.tmp
+
+# Kubeconfig files — chứa token, không commit
+*.kubeconfig
+kubeconfig*
+.kube/
+
+# Terraform state — chứa sensitive outputs
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup
+infra/terraform/.terraform.lock.hcl
