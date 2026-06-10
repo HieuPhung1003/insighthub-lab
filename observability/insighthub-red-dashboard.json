@@ -33,6 +33,12 @@
       "id": "bargauge",
       "name": "Bar gauge",
       "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
     }
   ],
   "annotations": {
@@ -419,11 +425,168 @@
           "instant": true
         }
       ]
+    },
+    {
+      "id": 7,
+      "title": "LLM Cost Rate ($/hr)",
+      "description": "Estimated USD spend per hour based on token throughput × price variables above.\nPrices default to Gemini 2.5 Flash (input $0.15/1M, output $0.60/1M).\nChange the Input/Output $/1M tok variables at the top to match your deployed model.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "USD/hr",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "decimals": 6,
+          "min": 0,
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "(\n  sum by (model) (rate(insighthub_llm_tokens_total{direction=\"input\"}[$__rate_interval])) * ${price_input_per_1m} / 1e6\n  +\n  sum by (model) (rate(insighthub_llm_tokens_total{direction=\"output\"}[$__rate_interval])) * ${price_output_per_1m} / 1e6\n) * 3600",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Total LLM Cost (cumulative $)",
+      "description": "Cumulative USD spent since the API process last started.\nResets on container restart (counter reset). For persistent cost tracking see Day 6 LiteLLM cost dashboard.",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 4,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "orange", "value": 0.10 },
+              { "color": "red", "value": 1.00 }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum(insighthub_llm_tokens_total{direction=\"input\"}) * ${price_input_per_1m} / 1e6\n+\nsum(insighthub_llm_tokens_total{direction=\"output\"}) * ${price_output_per_1m} / 1e6",
+          "legendFormat": "total cost",
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Token Throughput (tokens/min)",
+      "description": "LLM token consumption rate broken down by model and direction.\nInput tokens drive retrieval-augmented prompt size; output tokens drive generation cost.\nHigh input/output ratio = large context windows being sent.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "tok/min",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "output" },
+            "properties": [
+              { "id": "custom.fillOpacity", "value": 5 },
+              { "id": "custom.lineStyle", "value": { "dash": [8, 4], "fill": "dash" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (model) (rate(insighthub_llm_tokens_total{direction=\"input\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{model}} input",
+          "refId": "input"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (model) (rate(insighthub_llm_tokens_total{direction=\"output\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{model}} output",
+          "refId": "output"
+        }
+      ]
     }
   ],
   "refresh": "30s",
   "schemaVersion": 38,
-  "tags": ["insighthub", "red", "rag", "day4"],
+  "tags": ["insighthub", "red", "rag", "finops", "day4", "day6"],
   "templating": {
     "list": [
       {
@@ -438,13 +601,29 @@
         "refresh": 1,
         "regex": "",
         "type": "datasource"
+      },
+      {
+        "description": "Input token price (USD per 1M tokens). Gemini 2.5 Flash=0.15 | 2.0 Flash=0.10 | flash-lite=0.075 | GPT-4o=2.50",
+        "hide": 0,
+        "label": "Input $/1M tok",
+        "name": "price_input_per_1m",
+        "query": "0.15",
+        "type": "textbox"
+      },
+      {
+        "description": "Output token price (USD per 1M tokens). Gemini 2.5 Flash=0.60 | 2.0 Flash=0.40 | flash-lite=0.30 | GPT-4o=10.00",
+        "hide": 0,
+        "label": "Output $/1M tok",
+        "name": "price_output_per_1m",
+        "query": "0.60",
+        "type": "textbox"
       }
     ]
   },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "InsightHub — RED Dashboard",
+  "title": "InsightHub — RED + FinOps Dashboard",
   "uid": "insighthub-red-v1",
-  "version": 1
+  "version": 2
 }

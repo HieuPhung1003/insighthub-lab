@@ -30,7 +30,7 @@ llm_call_latency = Histogram(
 llm_tokens_total = Counter(
     "insighthub_llm_tokens_total",
     "Tổng token LLM theo loại — phục vụ FinOps Day 6",
-    ["direction"],  # input | output
+    ["model", "direction"],  # model: resolved model name; direction: input | output
 )
 
 embedding_tokens_total = Counter(
