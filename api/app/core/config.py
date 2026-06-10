@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     app_name: str = "InsightHub API"
     environment: str = "development"
     log_level: str = "INFO"
+    # Comma-separated list of allowed CORS origins.
+    # Default "*" in development; set to e.g. "https://app.example.com" in production.
+    allowed_origins: str = "*"
 
     # --- Database ---
     database_url: str = "postgresql://insighthub:insighthub@postgres:5432/insighthub"
