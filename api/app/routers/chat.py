@@ -8,6 +8,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.config import get_settings
 from app.core.metrics import (
     embedding_tokens_total,
     llm_call_latency,
@@ -16,6 +17,8 @@ from app.core.metrics import (
 )
 from app.services.llm import generate
 from app.services.retrieval import retrieve
+
+_settings = get_settings()
 
 logger = logging.getLogger("insighthub.routers.chat")
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -54,8 +57,9 @@ async def chat(req: ChatRequest):
 
     # Metrics cho FinOps Day 6
     usage = result.get("usage", {})
-    llm_tokens_total.labels(direction="input").inc(usage.get("input_tokens", 0))
-    llm_tokens_total.labels(direction="output").inc(usage.get("output_tokens", 0))
+    _model = _settings.resolved_chat_model
+    llm_tokens_total.labels(model=_model, direction="input").inc(usage.get("input_tokens", 0))
+    llm_tokens_total.labels(model=_model, direction="output").inc(usage.get("output_tokens", 0))
     # Embedding token approx (1 query ~ số từ)
     embedding_tokens_total.inc(len(req.question.split()))
 
