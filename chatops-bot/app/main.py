@@ -6,6 +6,8 @@ Nhận câu hỏi vận hành từ Slack (Socket Mode), dùng Gemini + tools
 """
 import asyncio
 import functools
+import hashlib
+import hmac
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +19,8 @@ from google import genai
 from google.genai import types
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
+
+from app.permissions import is_auto_approved, approval_message
 
 from app.audit import log_tool_call
 
@@ -43,6 +47,23 @@ INSIGHTHUB_API_URL   = os.getenv(
 slack_app     = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 gemini_client  = genai.Client(api_key=GEMINI_API_KEY)
 _thread_pool   = ThreadPoolExecutor(max_workers=4)  # chạy Gemini sync trong thread
+
+# ── Slack signature verification (dùng cho HTTP Events API mode) ──────────────
+
+def verify_slack_signature(body: bytes, timestamp: str, x_slack_signature: str) -> bool:
+    """Verify Slack request signature theo HMAC-SHA256.
+
+    Socket Mode dùng OAuth nên không cần verify per-request,
+    nhưng giữ hàm này để dùng khi switch sang HTTP Events API.
+    """
+    basestring = f"v0:{timestamp}:{body.decode('utf-8')}"
+    mac = hmac.new(
+        SLACK_SIGNING_SECRET.encode("utf-8"),
+        basestring.encode("utf-8"),
+        hashlib.sha256,
+    )
+    expected = "v0=" + mac.hexdigest()
+    return hmac.compare_digest(expected, x_slack_signature)
 
 # ── Tool definitions ──────────────────────────────────────────────────────────
 
@@ -117,6 +138,12 @@ async def _prom_query(query: str) -> str:
 
 
 async def _execute_tool(name: str, args: dict, user: str) -> str:
+    # Kiểm tra permission tier trước khi thực thi
+    if not is_auto_approved(name):
+        msg = approval_message(name)
+        log_tool_call(user=user, tool=name, args=args, result_summary="BLOCKED — requires approval", approved=False)
+        return msg
+
     try:
         if name == "get_pods":
             result = await _kubectl("get", "pods", "-n", "insighthub-dev", "-o", "wide")
