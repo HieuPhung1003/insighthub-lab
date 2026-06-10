@@ -40,5 +40,4 @@ def log_tool_call(
         "result": result_summary,
         "approved": approved,
     }
-    # TODO: thay bằng ghi file / gửi log aggregator
     logger.info("AUDIT %s", json.dumps(record, ensure_ascii=False))
