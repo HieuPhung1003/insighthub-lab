@@ -254,7 +254,7 @@ jobs:
           # Apply each service: expand ${IMAGE} placeholder then kubectl apply
           for svc in api web ingestion-worker; do
             export IMAGE="${IMAGE_REPO}/${svc}:${IMAGE_TAG}"
-            envsubst '${IMAGE}' < "infra/k8s/${svc}/deployment.yaml" | kubectl apply -f -
+            envsubst '${IMAGE} ${IMAGE_TAG}' < "infra/k8s/${svc}/deployment.yaml" | kubectl apply -f -
             if [[ -f "infra/k8s/${svc}/service.yaml" ]]; then
               kubectl apply -f "infra/k8s/${svc}/service.yaml"
             fi
