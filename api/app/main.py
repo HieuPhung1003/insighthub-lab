@@ -41,13 +41,17 @@ app.add_middleware(
 
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
-    response = await call_next(request)
-    http_requests_total.labels(
-        method=request.method,
-        endpoint=request.url.path,
-        status=response.status_code,
-    ).inc()
-    return response
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        http_requests_total.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status=status_code,
+        ).inc()
 
 
 @app.get("/metrics")

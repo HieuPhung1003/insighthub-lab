@@ -1,0 +1,134 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: insighthub-anomaly-llm-latency
+  namespace: insighthub-dev
+  labels:
+    release: kube-prometheus-stack   # phải khớp với ruleSelector của Prometheus
+    app: insighthub
+    component: anomaly-detection
+spec:
+  groups:
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Group 1 — Signal
+    # Tính p95 LLM latency mỗi 1 phút — đây là time-series làm input
+    # cho tất cả các band bên dưới.
+    # interval 1m = độ phân giải subquery cũng là 1m (tránh gap).
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: insighthub.llm.latency.signal
+      interval: 1m
+      rules:
+        - record: insighthub:llm_call_latency_p95:rate5m
+          labels:
+            strategy: adaptive
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum(rate(insighthub_llm_call_latency_seconds_bucket[5m])) by (le)
+            )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Group 2 — Adaptive bands
+    #
+    # Strategy: mean ± k·stddev trên cửa sổ 26h (framework grafana/promql-anomaly-detection).
+    # Subquery [26h:1m] → 1560 điểm, đủ để tính phân phối vững.
+    #
+    # margin = clamp_min(stddev, 0.5s):
+    #   Khi variance thấp (LLM ổn định), band không bị thu hẹp dưới 0.5s,
+    #   tránh alert giả vì biến động nhỏ tự nhiên.
+    #
+    # Warning  band_upper = mean + 2σ  (~95.4% observations nằm trong)
+    # Critical band_upper = mean + 3σ  (~99.7% observations nằm trong)
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: insighthub.llm.latency.adaptive_bands
+      rules:
+
+        - record: insighthub:llm_call_latency_p95:mean_26h
+          labels:
+            strategy: adaptive
+          expr: |
+            avg_over_time(insighthub:llm_call_latency_p95:rate5m[26h:1m])
+
+        - record: insighthub:llm_call_latency_p95:stddev_26h
+          labels:
+            strategy: adaptive
+          expr: |
+            stddev_over_time(insighthub:llm_call_latency_p95:rate5m[26h:1m])
+
+        # Upper band WARNING — mean + 2σ
+        - record: insighthub:llm_call_latency_p95:band_upper
+          labels:
+            strategy: adaptive
+            severity: warning
+          expr: |
+            insighthub:llm_call_latency_p95:mean_26h
+            + 2 * clamp_min(insighthub:llm_call_latency_p95:stddev_26h, 0.5)
+
+        # Upper band CRITICAL — mean + 3σ
+        - record: insighthub:llm_call_latency_p95:band_upper_critical
+          labels:
+            strategy: adaptive
+            severity: critical
+          expr: |
+            insighthub:llm_call_latency_p95:mean_26h
+            + 3 * clamp_min(insighthub:llm_call_latency_p95:stddev_26h, 0.5)
+
+        # Lower band — clamp tại 0 (latency không âm)
+        - record: insighthub:llm_call_latency_p95:band_lower
+          labels:
+            strategy: adaptive
+          expr: |
+            clamp_min(
+              insighthub:llm_call_latency_p95:mean_26h
+              - 2 * clamp_min(insighthub:llm_call_latency_p95:stddev_26h, 0.5),
+              0
+            )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Group 3 — Alerting rules
+    #
+    # Điều kiện chung: recording rule signal (p95) phải có giá trị —
+    # nếu chưa có đủ 26h baseline, band_upper sẽ không có data → alert không nổ
+    # (behavior đúng: không alert khi chưa đủ baseline).
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: insighthub.llm.latency.alerts
+      rules:
+
+        # ── Warning: p95 vượt mean+2σ trong 2 phút liên tục ─────────────────
+        - alert: InsightHubLLMLatencyHighAnomaly
+          expr: |
+            insighthub:llm_call_latency_p95:rate5m
+            > ignoring(severity) insighthub:llm_call_latency_p95:band_upper
+          for: 2m
+          labels:
+            severity: warning
+            team: insighthub
+            strategy: adaptive
+          annotations:
+            summary: "LLM latency p95 vượt upper band (mean+2σ)"
+            description: >-
+              LLM call latency p95 = {{ $value | printf "%.2f" }}s vượt quá ngưỡng
+              adaptive upper band (mean + 2σ).
+              Nguyên nhân thường gặp: LLM provider throttling, prompt quá dài,
+              hoặc model đang bị quá tải.
+              Xem dashboard: InsightHub — RED Dashboard, panel "LLM Call Latency p95".
+
+        # ── Critical: p95 vượt mean+3σ trong 5 phút liên tục ────────────────
+        - alert: InsightHubLLMLatencyCriticalAnomaly
+          expr: |
+            insighthub:llm_call_latency_p95:rate5m
+            > ignoring(severity) insighthub:llm_call_latency_p95:band_upper_critical
+          for: 5m
+          labels:
+            severity: critical
+            team: insighthub
+            strategy: adaptive
+          annotations:
+            summary: "LLM latency p95 vượt critical band (mean+3σ) — dịch vụ RAG bị ảnh hưởng"
+            description: >-
+              LLM call latency p95 = {{ $value | printf "%.2f" }}s vượt quá ngưỡng
+              critical band (mean + 3σ) trong 5 phút liên tục.
+              Mức độ: RAG pipeline đang bị degraded đáng kể.
+              Hành động: kiểm tra LLM provider dashboard, xem xét fallback sang provider khác
+              hoặc tăng timeout cho /chat endpoint.

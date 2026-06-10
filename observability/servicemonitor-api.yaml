@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: insighthub-api
+  namespace: insighthub-dev
+  labels:
+    app: api
+    # Label này để Prometheus Operator tìm thấy ServiceMonitor
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: api
+  namespaceSelector:
+    matchNames:
+      - insighthub-dev
+  endpoints:
+    - port: http          # Tên port trong Service (port name: http, port: 8000)
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
